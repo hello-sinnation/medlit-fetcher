@@ -100,12 +100,12 @@ if st.button("🔎 Search"):
                 if data["title"] == "No Title" and data["authors"] == "N/A":
                     fail_count += 1
                     continue
-                st.markdown(f"### [{data['title']}]({data['url']})")
-                st.write(f"**Authors:** {data['authors']}")
-                st.write(f"**Journal:** {data['journal']} | **Published:** {data['date']}")
-                st.write(f"**Abstract:** {data['abstract']}")
-                st.markdown(f"📖 **Vancouver Citation:** {data['citation']}", unsafe_allow_html=True)
-                st.markdown("---")
+                with st.expander(f"📄 {data['title']}"):
+                    st.write(f"**Authors:** {data['authors']}")
+                    st.write(f"**Journal:** {data['journal']} | **Published:** {data['date']}")
+                    st.write(f"**Abstract:** {data['abstract']}")
+                    st.markdown(f"📖 **Vancouver Citation:** {data['citation']}", unsafe_allow_html=True)
+                    st.markdown("---")
 
             if fail_count:
                 st.warning(f"{fail_count} articles could not be loaded due to missing data.")
