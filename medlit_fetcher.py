@@ -13,21 +13,6 @@ max_results = st.slider("Number of articles to display:", 5, 50, 10)
 year_range = st.slider("Select publication year range:", 1950, datetime.now().year, (2015, datetime.now().year))
 
 country_filter = st.selectbox("🌍 Filter by region:", ["All", "India", "Foreign"])
-study_types = st.multiselect("📊 Select Study Type(s):", [
-    "Observational", "Cross-sectional", "Cohort", "Case-Control",
-    "Experimental", "Clinical Trial", "Systematic Review"
-])
-
-# PubMed filter mappings for study types
-study_type_filters = {
-    "Observational": "(Observational Study[pt])",
-    "Cross-sectional": "(Cross-Sectional Studies[MeSH Terms])",
-    "Cohort": "(Cohort Studies[MeSH Terms])",
-    "Case-Control": "(Case-Control Studies[MeSH Terms])",
-    "Experimental": "(Experimental[tiab])",
-    "Clinical Trial": "(Clinical Trial[pt])",
-    "Systematic Review": "(Systematic Review[pt] OR systematic[sb])"
-}
 
 def fetch_pubmed_articles(query, max_results=10):
     country_query = ""
@@ -36,16 +21,10 @@ def fetch_pubmed_articles(query, max_results=10):
     elif country_filter == "Foreign":
         country_query = " NOT (India[AD] OR India[PL])"
 
-    study_query = ""
-    if study_types:
-        mapped = [study_type_filters[st] for st in study_types if st in study_type_filters]
-        if mapped:
-            study_query = " AND (" + " OR ".join(mapped) + ")"
-
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     params = {
         "db": "pubmed",
-        "term": f'({query}) AND ("{year_range[0]}"[PDAT] : "{year_range[1]}"[PDAT]) AND (humans[MeSH Terms]) AND (journal article[Publication Type]) AND (hasabstract[text]){country_query}{study_query}',
+        "term": f'({query}) AND ("{year_range[0]}"[PDAT] : "{year_range[1]}"[PDAT]) AND (humans[MeSH Terms]) AND (journal article[Publication Type]) AND (hasabstract[text]){country_query}',
         "retmode": "json",
         "retmax": max_results,
         "sort": "relevance"
