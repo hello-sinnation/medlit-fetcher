@@ -2,14 +2,13 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
-import re
 
+# ------------------------- PAGE SETUP -------------------------
 st.set_page_config(page_title="MedLit Fetcher", layout="wide")
 st.title("📚 MedLit Fetcher – PubMed Article Finder")
 
-# ----------- 🔍 Fetch MeSH Terms for Suggestions -----------
+# ---------------------- LIVE MESH SUGGESTIONS ----------------------
 
-@st.cache_data(show_spinner=False)
 def fetch_mesh_suggestions(prefix):
     if not prefix:
         return []
@@ -20,27 +19,47 @@ def fetch_mesh_suggestions(prefix):
         response.raise_for_status()
         suggestions = [entry["label"] for entry in response.json()]
         return suggestions
-    except Exception as e:
+    except Exception:
         return []
 
-# ----------- 🔎 UI Input Section -----------
+# Session state for controlled live query
+if "search_text" not in st.session_state:
+    st.session_state.search_text = ""
+if "final_query" not in st.session_state:
+    st.session_state.final_query = ""
+if "run_search" not in st.session_state:
+    st.session_state.run_search = False
 
-query = st.text_input("🔍 Enter your search query:")
+# Text input field with on_change callback
+def on_text_change():
+    st.session_state.final_query = ""
+    st.session_state.search_text = st.session_state.temp_input
 
-# Display MeSH term suggestions
+st.text_input("🔍 Enter your search query:", key="temp_input", on_change=on_text_change)
+
+# Live suggestions display
+query = st.session_state.get("search_text", "")
 suggestions = fetch_mesh_suggestions(query)
-if query and suggestions:
-    st.markdown("**Suggestions:**")
+
+if query and not st.session_state.final_query:
+    st.markdown("**💡 Suggestions:**")
     for suggestion in suggestions:
-        if st.button(f"💡 {suggestion}"):
-            query = suggestion
-            st.experimental_rerun()
+        if st.button(suggestion):
+            st.session_state.final_query = suggestion
+            st.session_state.search_text = suggestion
+            st.session_state.run_search = True
+            st.rerun()
+
+# Use selected suggestion or current typed input
+active_query = st.session_state.final_query or st.session_state.search_text
+
+# ---------------------- FILTER CONTROLS ----------------------
 
 max_results = st.slider("Number of articles to display:", 5, 50, 10)
 year_range = st.slider("Select publication year range:", 1950, datetime.now().year, (2015, datetime.now().year))
 country_filter = st.selectbox("🌍 Filter by region:", ["All", "India", "Foreign"])
 
-# ----------- 📥 PubMed Search and Fetching -----------
+# ---------------------- PUBMED SEARCH ----------------------
 
 def fetch_pubmed_articles(query, max_results=10):
     country_query = ""
@@ -84,8 +103,8 @@ def fetch_details(pmid):
             "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
         }
 
-    title_tag = article.find("articletitle")
-    title = title_tag.text if title_tag else "No Title"
+    title = article.find("articletitle")
+    title_text = title.text if title else "No Title"
 
     authors = article.find_all("author")
     author_list = []
@@ -109,10 +128,10 @@ def fetch_details(pmid):
     abstract_text = abstract.text.strip() if abstract else "No abstract available."
 
     pubmed_url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
-    citation = f"{authors_str}. {title}. {journal_title}. {year}. PMID: {pmid}. [PubMed]({pubmed_url})"
+    citation = f"{authors_str}. {title_text}. {journal_title}. {year}. PMID: {pmid}. [PubMed]({pubmed_url})"
 
     return {
-        "title": title,
+        "title": title_text,
         "authors": authors_str,
         "journal": journal_title,
         "date": full_date,
@@ -122,25 +141,30 @@ def fetch_details(pmid):
         "url": pubmed_url
     }
 
-# ----------- 🧠 Run Search -----------
+# ---------------------- SEARCH TRIGGER ----------------------
 
-if st.button("🔎 Search") and query.strip():
-    with st.spinner("Fetching articles from PubMed..."):
-        ids = fetch_pubmed_articles(query, max_results)
-        if not ids:
-            st.warning("No articles found. Try a different query.")
-        else:
-            fail_count = 0
-            for pmid in ids:
-                data = fetch_details(pmid)
-                if data["title"] == "No Title" and data["authors"] == "N/A":
-                    fail_count += 1
-                    continue
-                with st.expander(f"📄 {data['title']}"):
-                    st.write(f"**Authors:** {data['authors']}")
-                    st.write(f"**Journal:** {data['journal']} | **Published:** {data['date']}")
-                    st.write(f"**Abstract:** {data['abstract']}")
-                    st.markdown(f"📖 **Vancouver Citation:** {data['citation']}", unsafe_allow_html=True)
-                    st.markdown("---")
-            if fail_count:
-                st.warning(f"{fail_count} articles could not be loaded due to missing data.")
+# Manual or auto-triggered search
+if st.button("🔎 Search") or st.session_state.get("run_search", False):
+    st.session_state.run_search = False
+
+    if active_query.strip():
+        with st.spinner("Fetching articles from PubMed..."):
+            ids = fetch_pubmed_articles(active_query, max_results)
+
+            if not ids:
+                st.warning("No articles found. Try a different query.")
+            else:
+                fail_count = 0
+                for pmid in ids:
+                    data = fetch_details(pmid)
+                    if data["title"] == "No Title" and data["authors"] == "N/A":
+                        fail_count += 1
+                        continue
+                    with st.expander(f"📄 {data['title']}"):
+                        st.write(f"**Authors:** {data['authors']}")
+                        st.write(f"**Journal:** {data['journal']} | **Published:** {data['date']}")
+                        st.write(f"**Abstract:** {data['abstract']}")
+                        st.markdown(f"📖 **Vancouver Citation:** {data['citation']}", unsafe_allow_html=True)
+                        st.markdown("---")
+                if fail_count:
+                    st.warning(f"{fail_count} articles could not be loaded due to missing data.")
