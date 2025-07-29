@@ -1,4 +1,7 @@
-streamlit>=1.32
-requests>=2.25
-beautifulsoup4>=4.11
-scholarly>=1.7
+streamlit
+requests
+biopython
+pandas
+lxml
+beautifulsoup4
+
