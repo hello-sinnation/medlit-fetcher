@@ -1,5 +1,0 @@
-streamlit
-pandas
-requests
-beautifulscoup4
-lxml
