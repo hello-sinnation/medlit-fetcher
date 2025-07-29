@@ -36,8 +36,22 @@ def fetch_details(pmid):
     response = requests.get(url, params=params)
     soup = BeautifulSoup(response.content, "lxml")
     article = soup.find("pubmedarticle")
-    
-    title = article.find("articletitle").text if article.find("articletitle") else "No Title"
+
+    if article is None:
+        return {
+            "title": "No Title",
+            "authors": "N/A",
+            "journal": "N/A",
+            "date": "N/A",
+            "abstract": "No abstract available.",
+            "citation": f"PMID: {pmid} (Details not found)",
+            "pmid": pmid,
+            "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+        }
+
+    title_tag = article.find("articletitle")
+    title = title_tag.text if title_tag else "No Title"
+
     authors = article.find_all("author")
     author_list = []
     for author in authors:
@@ -45,11 +59,12 @@ def fetch_details(pmid):
         firstname = author.find("forename")
         if lastname and firstname:
             author_list.append(f"{lastname.text} {firstname.text}")
-    authors_str = ", ".join(author_list)
+    authors_str = ", ".join(author_list) if author_list else "No authors listed"
 
     journal = article.find("journal")
-    journal_title = journal.find("title").text if journal and journal.find("title") else ""
-    pub_date = journal.find("pubdate")
+    journal_title = journal.find("title").text if journal and journal.find("title") else "Unknown Journal"
+
+    pub_date = journal.find("pubdate") if journal else None
     year = pub_date.find("year").text if pub_date and pub_date.find("year") else ""
     month = pub_date.find("month").text if pub_date and pub_date.find("month") else ""
     day = pub_date.find("day").text if pub_date and pub_date.find("day") else ""
@@ -59,7 +74,7 @@ def fetch_details(pmid):
     abstract_text = abstract.text.strip() if abstract else "No abstract available."
 
     pubmed_url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
-    
+
     citation = f"{authors_str}. {title}. {journal_title}. {year}. PMID: {pmid}. [PubMed]({pubmed_url})"
 
     return {
@@ -79,11 +94,18 @@ if st.button("🔎 Search"):
         if not ids:
             st.warning("No articles found. Try a different query.")
         else:
+            fail_count = 0
             for pmid in ids:
                 data = fetch_details(pmid)
+                if data["title"] == "No Title" and data["authors"] == "N/A":
+                    fail_count += 1
+                    continue
                 st.markdown(f"### [{data['title']}]({data['url']})")
                 st.write(f"**Authors:** {data['authors']}")
                 st.write(f"**Journal:** {data['journal']} | **Published:** {data['date']}")
                 st.write(f"**Abstract:** {data['abstract']}")
                 st.markdown(f"📖 **Vancouver Citation:** {data['citation']}", unsafe_allow_html=True)
                 st.markdown("---")
+
+            if fail_count:
+                st.warning(f"{fail_count} articles could not be loaded due to missing data.")
