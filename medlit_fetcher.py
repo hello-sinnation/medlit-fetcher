@@ -8,22 +8,50 @@ st.set_page_config(page_title="MedLit Fetcher", layout="wide")
 st.title("📚 MedLit Fetcher – PubMed Article Finder")
 
 # User input
-query = st.text_input("🔍 Enter your search query:", "laparoscopic cholecystectomy ICG")
+query = st.text_input("🔍 Enter your search query:", value="")
 max_results = st.slider("Number of articles to display:", 5, 50, 10)
 year_range = st.slider("Select publication year range:", 1950, datetime.now().year, (2015, datetime.now().year))
 
-# Fetch articles from PubMed
+country_filter = st.selectbox("🌍 Filter by region:", ["All", "India", "Foreign"])
+study_types = st.multiselect("📊 Select Study Type(s):", [
+    "Observational", "Cross-sectional", "Cohort", "Case-Control",
+    "Experimental", "Clinical Trial", "Systematic Review"
+])
+
+# PubMed filter mappings for study types
+study_type_filters = {
+    "Observational": "(Observational Study[pt])",
+    "Cross-sectional": "(Cross-Sectional Studies[MeSH Terms])",
+    "Cohort": "(Cohort Studies[MeSH Terms])",
+    "Case-Control": "(Case-Control Studies[MeSH Terms])",
+    "Experimental": "(Experimental[tiab])",
+    "Clinical Trial": "(Clinical Trial[pt])",
+    "Systematic Review": "(Systematic Review[pt] OR systematic[sb])"
+}
+
 def fetch_pubmed_articles(query, max_results=10):
+    country_query = ""
+    if country_filter == "India":
+        country_query = " AND (India[AD] OR India[PL])"
+    elif country_filter == "Foreign":
+        country_query = " NOT (India[AD] OR India[PL])"
+
+    study_query = ""
+    if study_types:
+        mapped = [study_type_filters[st] for st in study_types if st in study_type_filters]
+        if mapped:
+            study_query = " AND (" + " OR ".join(mapped) + ")"
+
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     params = {
         "db": "pubmed",
-        "term": f"{query} AND humans[MeSH Terms] AND hasabstract[text] AND journal article[Publication Type] AND ({year_range[0]}:{year_range[1]}[PDAT])",
+        "term": f'({query}) AND ("{year_range[0]}"[PDAT] : "{year_range[1]}"[PDAT]) AND (humans[MeSH Terms]) AND (journal article[Publication Type]) AND (hasabstract[text]){country_query}{study_query}',
         "retmode": "json",
         "retmax": max_results,
         "sort": "relevance"
     }
     response = requests.get(base_url, params=params)
-    id_list = response.json()["esearchresult"]["idlist"]
+    id_list = response.json()["esearchresult"].get("idlist", [])
     return id_list
 
 def fetch_details(pmid):
@@ -88,7 +116,7 @@ def fetch_details(pmid):
         "url": pubmed_url
     }
 
-if st.button("🔎 Search"):
+if st.button("🔎 Search") and query.strip():
     with st.spinner("Fetching articles from PubMed..."):
         ids = fetch_pubmed_articles(query, max_results)
         if not ids:
